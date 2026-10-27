@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.3
 
-FROM php:8.3-fpm-alpine3.20
+FROM php:8.4-fpm-alpine
 RUN set -ex; \
     \
     export CFLAGS="${PHP_CFLAGS:?}"; \
@@ -28,6 +28,7 @@ RUN set -ex; \
         gettext-dev \
         icu-dev \
         imap-dev \
+        krb5-dev \
         libpng-dev \
         libzip-dev \
         openldap-dev \
@@ -35,11 +36,9 @@ RUN set -ex; \
     ; \
     \
     # Install PHP extensions
-    docker-php-ext-configure imap --with-imap-ssl; \
     docker-php-ext-install -j "$(nproc)" \
         gd \
         gettext \
-        imap \
         intl \
         ldap \
         mysqli \
@@ -47,9 +46,11 @@ RUN set -ex; \
         zip \
     ; \
     pecl install apcu; \
+    pecl install imap; \
     docker-php-ext-enable \
         apcu \
         opcache \
+        imap \
     ; \
     \
     # Create msmtp log
@@ -64,8 +65,8 @@ RUN set -ex; \
     rm -rf /tmp/pear /var/cache/apk/*
 # DO NOT FORGET TO CHECK THE LANGUAGE PACK DOWNLOAD URL BELOW
 # DO NOT FORGET TO UPDATE "image-version" FILE
-ENV OSTICKET_VERSION=1.18.2 \
-    OSTICKET_SHA256SUM=9e523ca5bec6324166bdb60fe2bce26c37fc6eefb256e281ad95f70138486bc6
+ENV OSTICKET_VERSION=1.18.3 \
+    OSTICKET_SHA256SUM=f61b672c3ecf47a3e546fab8c9e2206ca7b33f908518eda6675b269812ff0cb6
 RUN --mount=type=bind,source=utils/verify-plugin.php,target=/tmp/verify-plugin.php,readonly \
     \
     set -ex; \
@@ -107,16 +108,19 @@ RUN set -ex; \
         # (e.g. due to a checksum mismatch)
         php -r "new Phar(\"${phar}\");"; \
     done
-ENV OSTICKET_SLACK_VERSION=de1d9a276a64520eea6e6368e609a0f4c4829d96 \
-    OSTICKET_SLACK_SHA256SUM=8d06500fd5b8a589a5f7103c242160086ca1696a5b93d0e3767119a54059532b
+# Slack plugin for OSTicket
+ENV OSTICKET_SLACK_VERSION=15c0cadfbc0c0548cde5750eda5f29d36381683b \
+    OSTICKET_SLACK_SHA256SUM=635e024176742116f288146b6d7397f614be0ef812cbbffbc649789cc51bbb79
 RUN set -ex; \
     \
-    wget -q -O osTicket-slack-plugin.tar.gz https://github.com/devinsolutions/\
-osTicket-slack-plugin/archive/${OSTICKET_SLACK_VERSION}.tar.gz; \
+    wget -q -O osTicket-slack-plugin.tar.gz https://github.com/clonemeagain/\
+osticket-slack/archive/${OSTICKET_SLACK_VERSION}.tar.gz; \
     echo "${OSTICKET_SLACK_SHA256SUM}  osTicket-slack-plugin.tar.gz" | sha256sum -c; \
-    tar -xzf osTicket-slack-plugin.tar.gz -C /var/www/html/include/plugins --strip-components 1 \
-        osTicket-slack-plugin-${OSTICKET_SLACK_VERSION}/slack; \
-    rm osTicket-slack-plugin.tar.gz
+    mkdir /var/www/html/include/plugins/slack; \
+    tar -xzf osTicket-slack-plugin.tar.gz -C /var/www/html/include/plugins/slack \
+        --strip-components=1; \
+    rm osTicket-slack-plugin.tar.gz; \
+    chown -R www-data:www-data /var/www/html/include/plugins/slack
 COPY root /
 CMD ["start"]
 STOPSIGNAL SIGTERM
